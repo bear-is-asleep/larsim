@@ -187,6 +187,21 @@ void sim::MergeSimSourcesUtility::MergeSimEnergyDeposits(
   std::transform(begin(src), end(src), back_inserter(dest), offsetEDepID);
 }
 
+void sim::MergeSimSourcesUtility::MergeSimEnergyDepositsLite(
+  std::vector<sim::SimEnergyDepositLite>& dest,
+  const std::vector<sim::SimEnergyDepositLite>& src,
+  std::size_t source_index) const
+{
+
+  int const offset = fG4TrackIDOffsets.at(source_index);
+  auto const offsetEDepID = [offset](sim::SimEnergyDepositLite const& edep) {
+    return sim::MergeSimSourcesUtility::offsetSimEnergyDepositLiteTrackID(edep, offset);
+  };
+
+  dest.reserve(dest.size() + src.size());
+  std::transform(begin(src), end(src), back_inserter(dest), offsetEDepID);
+}
+
 void sim::MergeSimSourcesUtility::MergeAuxDetHits(std::vector<sim::AuxDetHit>& dest,
                                                   const std::vector<sim::AuxDetHit>& src,
                                                   std::size_t source_index) const
@@ -262,6 +277,21 @@ sim::SimEnergyDeposit sim::MergeSimSourcesUtility::offsetSimEnergyDepositTrackID
     edep.T1(),              // t1
     tid,                    // id
     edep.PdgCode()          // pdg
+  };
+} // sim::MergeSimSourcesUtility::offsetTrackID()
+
+sim::SimEnergyDepositLite sim::MergeSimSourcesUtility::offsetSimEnergyDepositLiteTrackID(
+  sim::SimEnergyDepositLite const& edep,
+  int offset)
+{
+
+  auto tid = (edep.TrackID() >= 0) ? (edep.TrackID() + offset) : (edep.TrackID() - offset);
+
+  return sim::SimEnergyDepositLite{
+    edep.Energy(),          // e
+    edep.MidPoint(),        // middle
+    edep.Time(),            // t
+    tid,                    // id
   };
 } // sim::MergeSimSourcesUtility::offsetTrackID()
 

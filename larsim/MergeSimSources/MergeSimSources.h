@@ -19,6 +19,7 @@
 #include "lardataobj/Simulation/ParticleAncestryMap.h"
 #include "lardataobj/Simulation/SimChannel.h"
 #include "lardataobj/Simulation/SimEnergyDeposit.h"
+#include "lardataobj/Simulation/SimEnergyDepositLite.h"
 #include "lardataobj/Simulation/SimPhotons.h"
 
 #include <utility> // std::pair<>
@@ -54,6 +55,10 @@ namespace sim {
                                 const std::vector<sim::SimEnergyDeposit>&,
                                 size_t) const;
 
+    void MergeSimEnergyDepositsLite(std::vector<sim::SimEnergyDepositLite>&,
+                                const std::vector<sim::SimEnergyDepositLite>&,
+                                size_t) const;
+
     void MergeAuxDetHits(std::vector<sim::AuxDetHit>&,
                          const std::vector<sim::AuxDetHit>&,
                          size_t) const;
@@ -73,6 +78,7 @@ namespace sim {
     void UpdateG4TrackIDRange(std::pair<int, int>, size_t);
 
     static sim::SimEnergyDeposit offsetSimEnergyDepositTrackID(sim::SimEnergyDeposit const&, int);
+    static sim::SimEnergyDepositLite offsetSimEnergyDepositLiteTrackID(sim::SimEnergyDepositLite const&, int);
 
     static sim::AuxDetHit offsetAuxDetHitTrackID(sim::AuxDetHit const&, int);
 

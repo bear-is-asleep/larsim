@@ -38,6 +38,7 @@
 #include "lardataobj/Simulation/GeneratedParticleInfo.h"
 #include "lardataobj/Simulation/SimChannel.h"
 #include "lardataobj/Simulation/SimEnergyDeposit.h"
+#include "lardataobj/Simulation/SimEnergyDepositLite.h"
 #include "lardataobj/Simulation/SimPhotons.h"
 #include "larsim/Simulation/LArG4Parameters.h"
 #include "nusimdata/SimulationBase/MCParticle.h"
@@ -95,7 +96,7 @@ public:
 
     fhicl::Sequence<std::string> EnergyDepositInstanceLabels{
       fhicl::Name{"EnergyDepositInstanceLabels"},
-      fhicl::Comment{"labels of sim::SimEnergyDeposit collections to merge"},
+      fhicl::Comment{"labels of sim::SimEnergyDeposit(Lite) collections to merge"},
       std::vector<std::string>{"TPCActive", "Other"} // default
     };
 
@@ -116,6 +117,12 @@ public:
       fhicl::Name{"FillParticleAncestryMaps"},
       fhicl::Comment{"whether to merge particle ancestry maps"},
       true};
+    
+    fhicl::Atom<bool> UseSimEnergyDepositLite{
+      fhicl::Name{"UseSimEnergyDepositLite"},
+      fhicl::Comment{"whether to use sim::SimEnergyDepositLite instead of sim::SimEnergyDeposit"},
+      false // default
+    };
 
   }; // struct Config
 
@@ -140,6 +147,7 @@ private:
   bool const fFillAuxDetHits;
   std::vector<std::string> const fAuxDetHitsInstanceLabels;
   bool const fFillParticleAncestryMaps;
+  bool const fUseSimEnergyDepositLite;
 
   static std::string const ReflectedLabel;
 
@@ -183,6 +191,7 @@ sim::MergeSimSources::MergeSimSources(Parameters const& params)
   , fFillAuxDetHits(params().FillAuxDetHits())
   , fAuxDetHitsInstanceLabels(params().AuxDetHitsInstanceLabels())
   , fFillParticleAncestryMaps(params().FillParticleAncestryMaps())
+  , fUseSimEnergyDepositLite(params().UseSimEnergyDepositLite()) //Get directly from fcl
 {
 
   if (fInputSourcesLabels.size() != fTrackIDOffsets.size()) {
@@ -219,7 +228,12 @@ sim::MergeSimSources::MergeSimSources(Parameters const& params)
     if (fFillSimEnergyDeposits) {
       for (std::string const& edep_inst : fEnergyDepositionInstances) {
         art::InputTag const edep_tag{tag.label(), edep_inst};
-        consumes<std::vector<sim::SimEnergyDeposit>>(edep_tag);
+        if (fUseSimEnergyDepositLite){
+          consumes<std::vector<sim::SimEnergyDepositLite>>(edep_tag);
+        }
+        else{
+          consumes<std::vector<sim::SimEnergyDeposit>>(edep_tag);
+        }
       }
     } // if fill energy deposits
 
@@ -257,7 +271,12 @@ sim::MergeSimSources::MergeSimSources(Parameters const& params)
 
   if (fFillSimEnergyDeposits) {
     for (std::string const& edep_inst : fEnergyDepositionInstances)
+    if (fUseSimEnergyDepositLite){
+      produces<std::vector<sim::SimEnergyDepositLite>>(edep_inst);
+    }
+    else{
       produces<std::vector<sim::SimEnergyDeposit>>(edep_inst);
+    }
   } // if
 
   if (fFillAuxDetHits) {
@@ -284,9 +303,13 @@ void sim::MergeSimSources::produce(art::Event& e)
   auto adCol = std::make_unique<std::vector<sim::AuxDetSimChannel>>();
   auto pamCol = std::make_unique<std::vector<sim::ParticleAncestryMap>>();
 
-  using edeps_t = std::vector<sim::SimEnergyDeposit>;
+  using edeps_t = std::vector<sim::SimEnergyDeposit>; // type of energy deposit collection
+  using edepslite_t = std::vector<sim::SimEnergyDepositLite>; // type of energy deposit collection
+
   std::vector<edeps_t> edepCols;
-  if (fFillSimEnergyDeposits) edepCols.resize(fEnergyDepositionInstances.size());
+  std::vector<edepslite_t> edepColslite;
+  if (fFillSimEnergyDeposits && !fUseSimEnergyDepositLite) edepCols.resize(fEnergyDepositionInstances.size());
+  if (fFillSimEnergyDeposits && fUseSimEnergyDepositLite) edepColslite.resize(fEnergyDepositionInstances.size());
 
   using aux_det_hits_t = std::vector<sim::AuxDetHit>;
   std::vector<aux_det_hits_t> auxdethitCols;
@@ -350,7 +373,12 @@ void sim::MergeSimSources::produce(art::Event& e)
     if (fFillSimEnergyDeposits) {
       for (auto const& [edep_inst, edepCol] : util::zip(fEnergyDepositionInstances, edepCols)) {
         art::InputTag const edep_tag{input_label.label(), edep_inst};
-        MergeUtility.MergeSimEnergyDeposits(edepCol, e.getProduct<edeps_t>(edep_tag), i_source);
+        if (fUseSimEnergyDepositLite){
+          MergeUtility.MergeSimEnergyDepositsLite(edepCol, e.getProduct<edepslite_t>(edep_tag), i_source);
+        }
+        else{
+          MergeUtility.MergeSimEnergyDeposits(edepCol, e.getProduct<edeps_t>(edep_tag), i_source);
+        }
       } // for edep
     }   // if fill energy depositions
 
@@ -389,9 +417,17 @@ void sim::MergeSimSources::produce(art::Event& e)
   }
 
   if (fFillSimEnergyDeposits) {
-    for (auto&& [edep_inst, edepCol] : util::zip(fEnergyDepositionInstances, edepCols)) {
-      e.put(std::make_unique<edeps_t>(move(edepCol)), edep_inst);
-    } // for
+    if (fUseSimEnergyDepositLite){
+      for (auto&& [edep_inst, edepCol] : util::zip(fEnergyDepositionInstances, edepColslite)) {
+        e.put(std::make_unique<edepslite_t>(move(edepCol)), edep_inst);
+      } // for
+    }
+    else
+    {
+      for (auto&& [edep_inst, edepCol] : util::zip(fEnergyDepositionInstances, edepCols)) {
+        e.put(std::make_unique<edeps_t>(move(edepCol)), edep_inst);
+      } // for
+    } // sed lite or no?
   }   // if fill energy deposits
 
   if (fFillAuxDetHits) {
